@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Officer ID — Tool</title>
+
+  <!-- SheetJS (for client-side XLSX export). When offline, download this file separately and host locally. -->
+  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+
+  <style>
+    :root{
+      --bg: #ffffff;
+      --card: #ffffff;
+      --muted: #5b6b77;
+      --accent: #0b5cff;
+      --success: #0dbb7a;
+      --border: #e6eef6;
+    }
+    *{box-sizing:border-box;font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial}
+    body{margin:0;background:var(--bg);color:#122; padding:28px}
+    .container{max-width:1100px;margin:0 auto}
+    header{display:flex;align-items:center;gap:14px}
+    header img{width:72px;height:72px;object-fit:cover;border-radius:10px;border:1px solid var(--border)}
+    h1{margin:0;font-size:22px}
+    p.lead{margin:4px 0 12px 0;color:var(--muted)}
+    .card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px;box-shadow:0 6px 18px rgba(12,25,40,0.04)}
+    textarea{width:100%;min-height:260px;padding:12px;border-radius:8px;border:1px solid var(--border);font-family:monospace;font-size:14px;color:#042;background:#fbfdff;resize:vertical}
+    .controls{display:flex;gap:10px;align-items:center;margin-top:12px}
+    .btn{padding:10px 14px;border-radius:8px;border:0;cursor:pointer;font-weight:700}
+    .btn.paste{background:#f3f4f6;color:#0a2540;border:1px solid #e3e8ee}
+    .btn.run{background:var(--accent);color:#fff}
+    .btn.download{background:linear-gradient(180deg,#3ea0ff,#6fb8ff);color:#002}
+    .btn.clear{background:#f8fafc;border:1px solid var(--border);color:var(--muted)}
+    .row{display:flex;gap:12px;align-items:center;margin-top:12px}
+    .counts{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+    .count{background:#f8fafc;border:1px solid var(--border);padding:8px 10px;border-radius:8px;font-weight:700;color:#0b2540}
+    table{width:100%;border-collapse:collapse;margin-top:12px}
+    th,td{padding:8px;border-bottom:1px solid #f1f5f9;text-align:left;font-size:14px}
+    .small{font-size:13px;color:var(--muted)}
+    .right{margin-left:auto}
+    input[type="checkbox"]{transform:scale(1.1)}
+    footer{margin-top:18px;color:var(--muted);font-size:13px}
+    @media(max-width:900px){.row{flex-direction:column;align-items:stretch}.right{margin-left:0}}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <!-- local image from session; change or remove if not available -->
+      <img src="/mnt/data/1be10e7e-6cb7-485e-883a-65e4d855a2f2.png" alt="Officer ID"/>
+      <div>
+        <h1>Officer ID</h1>
+        <p class="lead">Paste names+IDs, Run to extract Number & Code, Download as Excel (.xlsx)</p>
+      </div>
+    </header>
+
+    <div class="card" style="margin-top:14px">
+      <label style="font-weight:700">Paste input (one line per record)</label>
+      <textarea id="inputArea" placeholder="Example:
+NINGAPPAMUTTENNAVARY(1105046)
+RAVI T (030012701)
+G N SUNIL RAJ(030012293)
+..."></textarea>
+
+      <div class="row">
+        <button class="btn paste" id="pasteBtn">Paste</button>
+        <button class="btn run" id="runBtn">Run</button>
+        <button class="btn download" id="downloadBtn">Download Excel</button>
+        <button class="btn clear" id="clearBtn">Clear</button>
+        <button class="btn" id="sampleBtn" style="background:#f1f5f9">Paste Sample</button>
+
+        <div class="right small">
+          <label style="display:flex;align-items:center;gap:8px">
+            <input type="checkbox" id="dedupe" checked/> Remove duplicate codes
+          </label>
+        </div>
+      </div>
+
+      <div class="counts" aria-hidden="false">
+        <div class="count">Input rows: <span id="countIn">0</span></div>
+        <div class="count">Output rows: <span id="countOut">0</span></div>
+        <div class="count">Duplicates: <span id="countDup">0</span></div>
+        <div class="count">Parse fails: <span id="countFail">0</span></div>
+      </div>
+
+      <div style="margin-top:14px">
+        <div style="display:flex;gap:12px;align-items:flex-start">
+          <div style="flex:1">
+            <label class="small">Preview (first 200 rows)</label>
+            <table id="previewTable" class="preview" style="background:#fff">
+              <thead>
+                <tr><th>#</th><th>Name</th><th>Number</th><th>Code</th></tr>
+              </thead>
+              <tbody id="previewBody">
+                <tr><td colspan="4" class="small" style="padding:12px">Waiting...</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div style="width:320px">
+            <label class="small">Run log</label>
+            <div id="runLog" class="small" style="background:#fbfdff;border:1px solid var(--border);padding:10px;border-radius:8px;margin-top:6px;min-height:90px">Awaiting run...</div>
+
+            <label class="small" style="display:block;margin-top:10px">Detected sample</label>
+            <div id="detectedSample" class="small" style="background:#fbfdff;border:1px solid var(--border);padding:10px;border-radius:8px;margin-top:6px;color:#0b2540">No run yet</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer>Save this file and open in Chrome/Edge. For bulk files consider uploading as .txt or .xlsx — I can add file upload if you want.</footer>
+  </div>
+
+<script>
+/*
+  Behavior:
+  - Extract first continuous digit sequence from each line.
+  - If extracted number starts with '03' -> Code = 'NL' + last 5 digits
+  - Else -> Code = 'NM' + last 4 digits
+  - Output columns in Excel: Name, Number, Code
+  - Paste button uses clipboard API
+  - Download Excel uses SheetJS (xlsx.full.min.js included above). If offline, save the HTML and include sheetjs locally.
+*/
+
+(function(){
+  const inputArea = document.getElementById('inputArea');
+  const pasteBtn = document.getElementById('pasteBtn');
+  const runBtn = document.getElementById('runBtn');
+  const downloadBtn = document.getElementById('downloadBtn');
+  const clearBtn = document.getElementById('clearBtn');
+  const sampleBtn = document.getElementById('sampleBtn');
+
+  const countIn = document.getElementById('countIn');
+  const countOut = document.getElementById('countOut');
+  const countDup = document.getElementById('countDup');
+  const countFail = document.getElementById('countFail');
+
+  const previewBody = document.getElementById('previewBody');
+  const runLog = document.getElementById('runLog');
+  const detectedSample = document.getElementById('detectedSample');
+  const dedupeCB = document.getElementById('dedupe');
+
+  let lastResult = [];
+
+  // precompiled regex to find first continuous digit sequence
+  // Extract number but KEEP full original line as Name
+const digitRe = /([0-9]{1,20})/;
+
+function extractNameAndNumber(line){
+  if(!line || typeof line !== "string") return null;
+
+  const originalName = line.trim(); // <-- FULL NAME AS YOU PASTED
+
+  // find first continuous number sequence
+  const m = digitRe.exec(line);
+  if(!m) return null;
+
+  const digits = m[1];  // extracted number
+
+  return {
+    name: originalName,  // KEEP FULL ORIGINAL TEXT
+    number: digits
+  };
+}
+
+ function numberToCode(digits) {
+  if (!digits) return null;
+
+  // Normal rule first
+  let code;
+  if (digits.startsWith("03")) {
+    code = "NL" + digits.slice(-5); // NL + last 5 digits
+  } else {
+    code = "NM" + digits.slice(-4); // NM + last 4 digits
+  }
+
+  // If NL0xxxxx → convert to NMxxxxx removing the leading 0
+  if (code.startsWith("NL0")) {
+    let last5 = digits.slice(-5);      // example: 05633
+    last5 = last5.replace(/^0+/, "");  // remove leading zeros → 5633
+    code = "NM" + last5;
+  }
+
+  return code;
+}
+
+
+  function run(){
+    try{
+      runLog.textContent = 'Running...';
+      const raw = inputArea.value || '';
+      if(!raw.trim()){
+        runLog.textContent = 'No input — paste names and numbers (one per line).';
+        return;
+      }
+      const lines = raw.split(/\r?\n/);
+      countIn.textContent = lines.length;
+      const parsed = [];
+      let fails = 0;
+
+      for(let i=0;i<lines.length;i++){
+        const L = lines[i].trim();
+        if(!L) continue;
+        const ex = extractNameAndNumber(L);
+        if(!ex){ fails++; continue; }
+        const code = numberToCode(ex.number);
+        parsed.push({ name: ex.name, number: ex.number, code });
+      }
+
+      // dedupe by code if requested
+      let dupCount = 0;
+      let final = parsed;
+      if(dedupeCB.checked){
+        const seen = new Set();
+        const out = [];
+        for(let i=0;i<parsed.length;i++){
+          const key = parsed[i].code;
+          if(!seen.has(key)){ seen.add(key); out.push(parsed[i]); }
+          else dupCount++;
+        }
+        final = out;
+      }
+
+      lastResult = final;
+      countOut.textContent = final.length;
+      countDup.textContent = dupCount;
+      countFail.textContent = fails;
+
+      // render preview (first 200)
+      while(previewBody.firstChild) previewBody.removeChild(previewBody.firstChild);
+      if(final.length === 0){
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = 4;
+        td.className = 'small';
+        td.style.padding = '12px';
+        td.textContent = 'No valid rows';
+        tr.appendChild(td);
+        previewBody.appendChild(tr);
+      } else {
+        const limit = Math.min(200, final.length);
+        for(let i=0;i<limit;i++){
+          const r = final[i];
+          const tr = document.createElement('tr');
+          const c0 = document.createElement('td'); c0.textContent = (i+1);
+          const c1 = document.createElement('td'); c1.textContent = r.name;
+          const c2 = document.createElement('td'); c2.textContent = r.number;
+          const c3 = document.createElement('td'); c3.textContent = r.code;
+          tr.appendChild(c0); tr.appendChild(c1); tr.appendChild(c2); tr.appendChild(c3);
+          previewBody.appendChild(tr);
+        }
+      }
+
+      detectedSample.textContent = final.length ? `${final[0].name} — ${final[0].number} — ${final[0].code}` : 'No output';
+      runLog.textContent = `Done — parsed ${parsed.length} items, ${fails} failed. Output ${final.length} rows${dedupeCB.checked ? ' (duplicates removed)' : ''}.`;
+    } catch(err){
+      console.error(err);
+      runLog.textContent = 'Error: ' + (err && err.message ? err.message : String(err));
+    }
+  }
+
+  function downloadExcel(){
+    try{
+      if(!lastResult || lastResult.length === 0){ alert('No output — run first'); return; }
+      // create worksheet data
+      const wsData = [
+        ['Name','Number','Code'],
+        ...lastResult.map(r => [r.name, r.number, r.code])
+      ];
+      // create workbook and sheet
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      XLSX.utils.book_append_sheet(wb, ws, 'OfficerCodes');
+      // write file
+      const wbout = XLSX.write(wb, { bookType:'xlsx', type:'array' });
+      const blob = new Blob([wbout], { type: 'application/octet-stream' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const now = new Date().toISOString().replace(/[:.]/g,'-');
+      a.download = `officer_codes_${now}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch(err){
+      console.error(err);
+      alert('Export failed: ' + (err && err.message ? err.message : String(err)));
+    }
+  }
+
+  // Paste button: clipboard API (HTTPS required for modern browsers, but works in local files in most browsers)
+  pasteBtn.addEventListener('click', async ()=> {
+    try {
+      const text = await navigator.clipboard.readText();
+      inputArea.value = (inputArea.value ? (inputArea.value + '\n') : '') + text;
+    } catch (e) {
+      // fallback: instruct user to paste manually
+      alert('Could not read clipboard automatically. Paste using Ctrl+V into the box.');
+    }
+  });
+
+  // sample fill
+  sampleBtn.addEventListener('click', ()=> {
+    inputArea.value = `NINGAPPAMUTTENNAVARY(1105046)
+NINGAPPAMUTTENNAVARY(1105046)
+MAHESHA C KATTIMANI (6753058)
+DHOOLESHBETAGERI(1104768)
+KIRANKUMARSINGADI(030010104)
+UMESHBOLASHETTI(1104767)
+NINGAPPAMUTTENNAVARY(1105046)`;
+  });
+
+  runBtn.addEventListener('click', run);
+  document.getElementById('sideRunBtn')?.addEventListener('click', run);
+  downloadBtn.addEventListener('click', downloadExcel);
+  clearBtn.addEventListener('click', ()=> {
+    if(!confirm('Clear input and preview?')) return;
+    inputArea.value=''; lastResult=[]; countIn.textContent='0'; countOut.textContent='0'; countDup.textContent='0'; countFail.textContent='0';
+    while(previewBody.firstChild) previewBody.removeChild(previewBody.firstChild);
+    const tr = document.createElement('tr');
+    const td = document.createElement('td'); td.colSpan = 4; td.className='small'; td.style.padding='12px'; td.textContent = 'Waiting...';
+    tr.appendChild(td); previewBody.appendChild(tr);
+    runLog.textContent = 'Cleared.'; detectedSample.textContent = 'No run yet';
+  });
+
+  // keyboard shortcut Ctrl+Enter -> run
+  inputArea.addEventListener('keydown', (e)=> { if(e.ctrlKey && e.key === 'Enter') run(); });
+
+  // expose functions for debugging
+  window.__officerRun = run;
+  window.__officerDownload = downloadExcel;
+})();
+</script>
+</body>
+</html>
